@@ -1,4 +1,4 @@
-#v0.1 bs4 - 20 Aug 21 - courtesy of Lai Yeow Ming
+#v0.2 bs4 - 20 Aug 21 - modified from googlnews_latest.py by YM
 from bs4 import BeautifulSoup
 import requests
 import pandas as pd
@@ -18,24 +18,30 @@ user_agent_list = [
 ]
 
 articles = []
+status = True
+
+# craft URL
 query = 'semiconductor'     #change keyword here - for multiple keywords, use '+'. e.g 'microchips+production'
 region = 'china'            #input location here.
-start_date = '2021-08-18'   #search date from.
-end_date = '2021-08-19'     #search date until.
+start_date = '2021-01-01'   #search date from.
+end_date = '2021-01-31'     #search date until.
 start_url = f'https://www.google.com/search?q={region}+{query}+after:{start_date}+before:{end_date}&source=lnms&tbm=nws&sa=X&ved=2ahUKEwiE772fyL3yAhUHOSsKHbDACH8Q_AUoAnoECAEQBA&biw=1350&bih=1052'
 
+# define header
+user_agent = ""
+for i in range(1):
+    user_agent = random.choice(user_agent_list)
+headers = {'User-Agent': user_agent}
 
-
-#-------------------- func #1 here --------------------
-def getArticles(url, region, query):
-    for i in range(1,8):
-        user_agent = random.choice(user_agent_list)
-    headers = {'User-Agent': user_agent}
-    r = requests.get(url, headers=headers)
-    print(r+' func #1')
+# getArticles function
+def getArticles():
+    global start_url
+    r = requests.get(start_url, headers=headers)
+    print(r)
     soup = BeautifulSoup(r.text, 'lxml')
     posts = soup.find_all('div', {'class': 'dbsr'})
-    for post in posts:  #query, region, title, excerpt, date, source, link as column heading
+
+    for post in posts:
         article = {
             'query' : query,
             'region' : region,
@@ -43,39 +49,36 @@ def getArticles(url, region, query):
             'excerpt' : post.find('div', {'class' : 'Y3v8qd'}).text,
             'date' : post.find('span', {'class' : 'WG9SHc'}).span.text,
             'source' : post.find('div', {'class' : 'XTjFC WF4CUc'}).text,
-            # 'link' : post.find('a', href=True)['href'],
+            'link': post.find('a').get('href')
         }
         articles.append(article)
-#-------------------- func #1 end --------------------
+
+# Change the URL to next page URL
+def nextURL():
+    global start_url, status
+    try:
+        r = requests.get(start_url, headers=headers)
+        print(r)
+        soup = BeautifulSoup(r.text, 'lxml')
+        next = soup.find('a', {'id':'pnnext'}).get('href')
+        start_url = "https://google.com" + next
+        status = True
+        print(status)
+    except:
+        status = False
+        print(status)
 
 
-#-------------------- func #2 here --------------------
-def next(url):
-    for i in range(1,8):
-        user_agent = random.choice(user_agent_list)
-    headers = {'User-Agent': user_agent}
-    r = requests.get(url, headers=headers)
-    print(r+' func #1')
-    soup = BeautifulSoup(r.text, 'lxml')
-    for p in soup.find_all('a', {'id' : 'pnnext'}, href =True):
-        if '/search?q=' in p['href']:
-            nextpage = 'https://www.google.com'+p['href']
-    return nextpage
-#-------------------- func #2 end -------------------- 
+
+# Looping through all Pagination
+while status == True:
+    getArticles()
+    nextURL()
+    
+# Store to dataframe then to CSV
+df = pd.DataFrame(articles)
+df.to_csv(str(query)+str(start_date)+'to'+str(end_date)+'.csv')
+print(len(articles))
 
 
-#------------------- main here -------------------- 
-url = start_url
-try:
-    while url is not next(url):
-        getArticles(url, region, query)
-        time.sleep(2)
-        url = next(url)
-        time.sleep(2)
-except:
-    print('crawl complete')
-finally:
-    df = pd.DataFrame(articles)
-    df.to_csv(str(query)+str(start_date)+'to'+str(end_date)+'.csv')
-    print(len(articles))
-#-------------------- main end -------------------- 
+
